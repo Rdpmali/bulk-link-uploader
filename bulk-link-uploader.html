@@ -7,6 +7,7 @@ button{padding:12px;margin:4px 0;width:100%;font-size:16px}
 #bar{height:8px;background:#ddd}#fill{height:8px;width:0;background:#2a7}
 table{width:100%;font-size:12px;word-break:break-all}
 td{border-bottom:1px solid #ddd;padding:4px}
+.small{background:#eee;border:0;font-size:13px;padding:8px}
 </style></head><body>
 <h2>Bulk Link Uploader</h2>
 <input type="file" id="f" accept="image/*" multiple hidden>
@@ -16,11 +17,32 @@ td{border-bottom:1px solid #ddd;padding:4px}
 <button onclick="copyLinks()">Copy all links</button>
 <button onclick="copyCsv()">Copy as CSV (name,link)</button>
 <table id="t"></table>
+<button class="small" onclick="resetKeys()">Change Cloudinary details</button>
 <script>
-const CLOUD="kmmali", PRESET="KM mali vip";
+let CLOUD="", PRESET="";
+try{CLOUD=localStorage.getItem("c")||"";PRESET=localStorage.getItem("p")||""}catch(e){}
+
+function ask(){
+  const c=prompt("Enter Cloud name");
+  const p=c?prompt("Enter Preset name"):null;
+  if(c&&p){
+    CLOUD=c.trim();PRESET=p.trim();
+    try{localStorage.setItem("c",CLOUD);localStorage.setItem("p",PRESET)}catch(e){}
+  }
+}
+function resetKeys(){
+  try{localStorage.removeItem("c");localStorage.removeItem("p")}catch(e){}
+  CLOUD="";PRESET="";ask();
+}
+function need(){
+  if(!CLOUD||!PRESET)ask();
+  return !!(CLOUD&&PRESET);
+}
+
 let files=[], results={};
 f.onchange=()=>{files=[...f.files];results={};render()};
 const ok=n=>(results[n]||"").startsWith("http");
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 
 async function shrink(file){
   try{
@@ -51,6 +73,7 @@ async function up(file){
 }
 
 async function start(){
+  if(!need())return;
   const q=files.filter(x=>!ok(x.name));let i=0;
   async function worker(){
     while(i<q.length){
@@ -66,7 +89,7 @@ function render(){
   const d=files.filter(x=>ok(x.name)).length;
   fill.style.width=(files.length?d/files.length*100:0)+"%";
   st.textContent=d+" / "+files.length+" uploaded";
-  t.innerHTML=files.map(x=>"<tr><td>"+x.name+"</td><td>"+(results[x.name]||"...")+"</td></tr>").join("");
+  t.innerHTML=files.map(x=>"<tr><td>"+esc(x.name)+"</td><td>"+esc(results[x.name]||"...")+"</td></tr>").join("");
 }
 const good=()=>files.filter(x=>ok(x.name));
 function copyLinks(){navigator.clipboard.writeText(good().map(x=>results[x.name]).join("\n"));alert("Copied")}
