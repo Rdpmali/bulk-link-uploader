@@ -1,0 +1,74 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bulk Link Uploader</title>
+<style>
+body{font-family:sans-serif;margin:0;padding:16px}
+button{padding:12px;margin:4px 0;width:100%;font-size:16px}
+#bar{height:8px;background:#ddd}#fill{height:8px;width:0;background:#2a7}
+table{width:100%;font-size:12px;word-break:break-all}
+td{border-bottom:1px solid #ddd;padding:4px}
+</style></head><body>
+<h2>Bulk Link Uploader</h2>
+<input type="file" id="f" accept="image/*" multiple hidden>
+<button onclick="f.click()">1. Select images</button>
+<button onclick="start()">2. Upload / Retry failed</button>
+<div id="bar"><div id="fill"></div></div><p id="st"></p>
+<button onclick="copyLinks()">Copy all links</button>
+<button onclick="copyCsv()">Copy as CSV (name,link)</button>
+<table id="t"></table>
+<script>
+const CLOUD="kmmali", PRESET="KM mali vip";
+let files=[], results={};
+f.onchange=()=>{files=[...f.files];results={};render()};
+const ok=n=>(results[n]||"").startsWith("http");
+
+async function shrink(file){
+  try{
+    const b=await createImageBitmap(file);
+    const s=Math.min(1,1600/Math.max(b.width,b.height));
+    const c=document.createElement("canvas");
+    c.width=Math.round(b.width*s);c.height=Math.round(b.height*s);
+    c.getContext("2d").drawImage(b,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(r,"image/webp",0.85));
+  }catch(e){return file}
+}
+
+async function up(file){
+  const base=file.name.replace(/\.[^.]+$/,"");
+  const blob=await shrink(file);
+  for(let i=0;i<3;i++){
+    try{
+      const fd=new FormData();
+      fd.append("file",blob,base+".webp");
+      fd.append("upload_preset",PRESET);
+      const r=await fetch("https://api.cloudinary.com/v1_1/"+CLOUD+"/image/upload",{method:"POST",body:fd});
+      const j=await r.json();
+      if(j.secure_url)return j.secure_url;
+      throw 0;
+    }catch(e){await new Promise(r=>setTimeout(r,1000*(i+1)))}
+  }
+  return "FAILED";
+}
+
+async function start(){
+  const q=files.filter(x=>!ok(x.name));let i=0;
+  async function worker(){
+    while(i<q.length){
+      const file=q[i++];
+      results[file.name]=await up(file);
+      render();
+    }
+  }
+  await Promise.all([1,2,3,4,5].map(worker));
+}
+
+function render(){
+  const d=files.filter(x=>ok(x.name)).length;
+  fill.style.width=(files.length?d/files.length*100:0)+"%";
+  st.textContent=d+" / "+files.length+" uploaded";
+  t.innerHTML=files.map(x=>"<tr><td>"+x.name+"</td><td>"+(results[x.name]||"...")+"</td></tr>").join("");
+}
+const good=()=>files.filter(x=>ok(x.name));
+function copyLinks(){navigator.clipboard.writeText(good().map(x=>results[x.name]).join("\n"));alert("Copied")}
+function copyCsv(){navigator.clipboard.writeText(good().map(x=>x.name+","+results[x.name]).join("\n"));alert("Copied")}
+</script></body></html>
